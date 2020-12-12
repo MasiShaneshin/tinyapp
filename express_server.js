@@ -6,9 +6,9 @@ const cookieSession = require('cookie-session')
 const app = express();
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const { json } = require("body-parser");
 const password = "purple-monkey-dinosaur"; // found in the req.params object
 const hashedPassword = bcrypt.hashSync(password, 10);
-
 
 app.set("view engine", "ejs") ;
 app.use(cookieParser());
@@ -16,7 +16,7 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 app.use(cookieSession({
   name: 'session',
-  keys: ['key1', 'key2']
+  keys: ['key1']
 }))
 //----Database------
 const urlDatabase = {
@@ -69,7 +69,7 @@ app.get("/register", (req, res) => {
   let templateVars = {
     user : users[req.session.user_id]
    };
-  res.render("registration",templateVars);
+  res.render("register",templateVars);
 })
 
 // -----create Registration------
@@ -102,29 +102,27 @@ app.get("/login", (req, res) =>{
 app.post("/login", (req, res) => {
   const user = emailExists(req.body.email);
   if (user){
-let password = bcrypt.compareSync(req.body.password, users[user]["password"]);
-if (password === true) {
-  req.session["user_id"] = user.id;
-  res.redirect("/urls");
-} else {
-  let templateVars = {
-    error: 401,
-    message: "Incorrect email or password",
-    user: users[req.session.user]
-  };
-  res.status(503).render("error_page", templateVars);
-} 
-}
+    if (bcrypt.compareSync(req.body.password, users[user.id]["password"])) {
+      req.session["user_id"] = user.id;
+      res.redirect("/urls");
+    } else {
+      let templateVars = {
+        error: 401,
+        message: "Incorrect email or password",
+        user: users[req.session.user]
+      };
+      res.status(503).render("error_page", templateVars);
+    } 
+  }else{
+    res.status(400).send("Email dosen't exsit");
+  }
 });
-  
-  
 
-//------logout page----------------
+//------log out page
 app.post("/logout", (req, res) => {
-  res.clearCookie("user_id");
+  res.clearCookie("session");
   res.redirect("/urls")
 });
-
 
 //----------- show all the urls for a specific user ------------
 app.get("/urls", (req, res) => {
@@ -137,7 +135,7 @@ app.get("/urls", (req, res) => {
   } else {
     const templateVars = { 
       user : null,
-      msg : "you must register or log in first"
+      message : "You have to Register/Login inorder to accesss to Tinyapp"
      };
     res.render("message",templateVars);
   }
@@ -167,13 +165,13 @@ app.get("/urls/:shortURL", (req, res) => {
   } else {
     const templateVars = { 
       user : null,
-      msg : "you must register or log in first or you don't have the right to display this url"
+      message : "You have to Register/Login in order to have the right to display this url"
      };
     res.render("message",templateVars);
   }
 });
 
-//-------create a new url----------------
+//----create a new url--------
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
   urlDatabase[shortURL] = {
@@ -183,8 +181,8 @@ app.post("/urls", (req, res) => {
   res.redirect(`/urls/${shortURL}`);       
 });
 
-//---------------delete an url---------------
-app.post('/urls/:shortURL',(req, res) => {
+// ------ Delete an url---------------
+app.post('/urls/:shortURL/delete',(req, res) => {
   if(req.session['user_id'] && urlsForUser(req.session['user_id']).hasOwnProperty(req.params.shortURL)) {
     const key = req.params.shortURL;
     delete urlDatabase[key];
@@ -192,33 +190,32 @@ app.post('/urls/:shortURL',(req, res) => {
   } else {
     const templateVars = { 
       user : users[req.session.user_id],
-      msg : "you must register or log in first or you don't have the right to delete this url"
+      message : "You have to Register/Login in order to have the right to delete this url"
      };
     res.render("message",templateVars);
   }
 });
 
-// ----------update an url--------------
+// ---- update an url--------------
 app.post('/urls/:shortURL/update',(req, res) => {
   if(req.session.user_id && urlsForUser(req.session.user_id).hasOwnProperty(req.params.shortURL)) {
   const key = req.params.shortURL;
-  urlDatabase[key].longURL = req.body.newURL;
+  urlDatabase[key].longURL = req.body.longURL;
   res.redirect("/urls");
 } else {
   const templateVars = { 
     user : users[req.session.user_id],
-    msg : "you must register or log in first or you don't have the right to update this url"
+    message : "You have to Register/Login in order to have the right to update this url"
    };
   res.render("message",templateVars);
 }
 });
 
-//----------Redirect any request to "/u/:shortURL" to its longURL--------------
+//------------Redirect any request to "/u/:shortURL" to its longURL--------------
 app.get("/u/:shortURL", (req, res) => {
   const longURL = urlDatabase[req.params.shortURL].longURL;
   res.redirect(longURL);
 });
-
 
 app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}!`);
